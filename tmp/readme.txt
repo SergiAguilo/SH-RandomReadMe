@@ -1,0 +1,1 @@
+SH_Worker is a simple worker for the SH system. It is written in Python and is licensed under a MIT license. It is designed to be run in a Docker container.
