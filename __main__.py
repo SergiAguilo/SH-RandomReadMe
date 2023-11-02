@@ -97,6 +97,7 @@ if __name__ == '__main__':
         response = requests.get(metadataUrl, data = body )
         responsej = response.json()
         print(responsej)
+        print('A bioiformatics repo was found')
     else:
         pass
 
