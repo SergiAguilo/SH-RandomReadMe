@@ -65,7 +65,7 @@ def retrieveRandomReadMe():
     readMe = retrieveReadMe(randomGithubPath)
     if not readMe:
         return
-    print(readMe)
+    return randomGithubPath, readMe
 
 def confVariables():
     githubToken = os.getenv('GITHUB_TOKEN', default='')
@@ -78,11 +78,27 @@ if __name__ == '__main__':
     header, NewestRepo = confVariables()
 
     # retrieve the readme
-    readme_dict = retrieveRandomReadMe()
+    randomGithubPath, readMe = retrieveRandomReadMe()
 
     # send the readme to the model
-
+    modelUrl = f"http://localhost:5800/predict"
+    body = {
+        "content": readMe,
+        "url": randomGithubPath
+    }
+    response = requests.get(modelUrl, data = body )
+    responsej = response.json()
     # get the metadata
+    if responsej["prediction"]=="bioinformatics": # Extract metadata
+        metadataUrl = f"http://localhost:5300/metadata?threshold=0.7&ignore_classifiers=false"
+        body = {
+            "content": readMe
+        }
+        response = requests.get(metadataUrl, data = body )
+        responsej = response.json()
+        print(responsej)
+    else:
+        pass
 
     # save the metadata in the database
     
