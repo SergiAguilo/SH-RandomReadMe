@@ -76,5 +76,13 @@ def confVariables():
 if __name__ == '__main__':
     # Put your the url of your newest repository
     header, NewestRepo = confVariables()
-    retrieveRandomReadMe()
+
+    # retrieve the readme
+    readme_dict = retrieveRandomReadMe()
+
+    # send the readme to the model
+
+    # get the metadata
+
+    # save the metadata in the database
     
