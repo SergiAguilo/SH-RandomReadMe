@@ -5,6 +5,8 @@
 # 4 - Take the README and send it via API to the Model
 import os
 import requests
+import json
+from random import seed
 from random import randint
 
 # seed(1)
