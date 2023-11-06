@@ -1,0 +1,21 @@
+version : “3”
+services :
+
+  sh-model-api:
+    image: emartps/sh-model-api:latest
+    container_name: model_api_container
+    ports:
+      - 5800:5800
+    volume:
+      - ./bioinfoRepo_bert:/api/bioinfoRepo_bert
+
+  sh-worker:
+    image: emartps/sh-worker:latest
+    container_name: worker_container
+
+  somef-api:
+    image: somef-api:latest
+    container_name: somef_api_container
+    ports:
+      - 5300:5300
+  

@@ -1,0 +1,39 @@
+version : “3”
+services :
+  nginx:
+    image: nginx:latest
+    container_name: nginx_container
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+  
+  mongodb:
+    image: mongo:6-jammy
+    ports:
+      - '27017:27017'
+    volumes:
+      - dbdata6:/data/db
+
+  sh-dash:
+    image: sh-dash:latest
+    container_name: dash_container
+    ports:
+      - 5000:5000
+  
+  sh-model-api:
+    image: sh-model-api:latest
+    container_name: model_api_container
+    ports:
+      - 5800:5800
+
+  sh-worker:
+    image: sh-worker:latest
+    container_name: worker_container
+
+  somef-api:
+    image: somef-api:latest
+    container_name: somef_api_container
+    ports:
+      - 5300:5300
+  
