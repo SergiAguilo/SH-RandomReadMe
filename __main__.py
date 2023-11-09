@@ -6,22 +6,52 @@
 import os
 import requests
 import json
+import logging
+from time import sleep
+from datetime import datetime
 from random import seed
 from random import randint
+from dotenv import load_dotenv
+from pymongo import MongoClient
+
+def connectMongo():
+    # variables come from .env file
+    mongoHost = os.getenv('MONGO_HOST', default='localhost')
+    mongoPort = os.getenv('MONGO_PORT', default='27017')
+    mongoUser = os.getenv('MONGO_USER')
+    mongoPass = os.getenv('MONGO_PWD')
+    mongoAuthSrc = os.getenv('MONGO_AUTH_SRC', default='admin')
+    mongoDb = os.getenv('MONGO_DB', default='oeb-research-software')
+    mongoCollection = os.getenv('MONGO_COLLECTION', default='githubMiner')
+
+    # Connect to MongoDB
+    mongoClient = MongoClient(
+        host=mongoHost,
+        port=int(mongoPort),
+        username=mongoUser,
+        password=mongoPass,
+        authSource=mongoAuthSrc,
+    )
+    db = mongoClient[mongoDb]
+    collection = db[mongoCollection]
+    print(list(collection.find()))
+    return collection
 
 # seed(1)
 
 def getMaxIdRepo():
     newestGithubRepo = NewestRepo.split('https://github.com/')[1]
-    resp = requests.get(f"https://api.github.com/repos/{newestGithubRepo}", headers = header)
+    url = f'https://api.github.com/repos/{newestGithubRepo}'
+    resp = requests.get(url, headers = header)
 
     idNewestRepo = None
     try:
         if (resp.status_code == 200):
             print(resp.json()['id'])
             idNewestRepo = resp.json()['id']
+            logging.info(f'ID of newest repo is {idNewestRepo}')
         else:
-            print(f"{newestGithubRepo} resulted in {resp}")
+            logging.error(f'Could not retrieve ID of newest repo. {url} resulted in {resp}')
     except:
         print(f"Could not find ID in {newestGithubRepo}")
     return idNewestRepo
@@ -38,19 +68,21 @@ def randomRepo(maxRepoId):
         githubUrl = response.json()['full_name']
     else:
         print(f"Github repo with Id {repoId} resulted in {response}")
+        resp = response.json()
+        print(resp)
 
     return githubUrl
 
 def retrieveReadMe(randomGithubPath):
     # Gather the README.md
-    readme_dict = None
+    readme_dict = {}
     try:
         reposUrl = f"https://raw.githubusercontent.com/{randomGithubPath}/master/README.md"
         response = requests.get(reposUrl, headers = header)
         if (response.status_code == 200):
             readme_dict = response.text
         else:
-            print(f"Github with Path '{randomGithubPath}' resulted in {response}")
+            print(f"readme of repo with Path '{randomGithubPath}' resulted in {response}")
     except:
         print(f"Could not find READ.me in Path '{randomGithubPath}'")
     return readme_dict
@@ -58,13 +90,23 @@ def retrieveReadMe(randomGithubPath):
 def retrieveRandomReadMe():
     idMaxRepo= getMaxIdRepo()
     if not idMaxRepo:
-        return
-    randomGithubPath = randomRepo(idMaxRepo)    # Get Random repo
-    if not randomGithubPath:
-        return
-    readMe = retrieveReadMe(randomGithubPath)
-    if not readMe:
-        return
+        raise Exception('No idMaxRepo! Aborting...')
+
+    readMe = ''
+
+    while not readMe: 
+        # Get Random repo
+        randomGithubPath = randomRepo(idMaxRepo)  # Can fail bc Id belong to private repo
+
+        if randomGithubPath:
+            # Get readme of repo
+            readMe = retrieveReadMe(randomGithubPath) # Can fail bc README.md does not exist in the repo
+            if not readMe:
+                logging.info('No readMe')
+        else:
+            logging.info('No randomGithubPath')
+        
+
     return randomGithubPath, readMe
 
 def confVariables():
@@ -73,33 +115,61 @@ def confVariables():
     NewestRepo = os.getenv('NEWEST_REPO', default='https://github.com/SergiAguilo/SH-Worker')
     return header, NewestRepo
 
-if __name__ == '__main__':
-    # Put your the url of your newest repository
-    header, NewestRepo = confVariables()
 
+
+def getOneRespositoryPrediction():
     # retrieve the readme
     randomGithubPath, readMe = retrieveRandomReadMe()
 
     # send the readme to the model
-    modelUrl = f"http://localhost:5800/predict"
+    modelUrl = f"http://sh-model-api:5800/predict"
     body = {
         "content": readMe,
-        "url": randomGithubPath
+        "url": f"https:github.com/{randomGithubPath}"
     }
-    response = requests.get(modelUrl, data = body )
+    response = requests.post(modelUrl, json = body )
     responsej = response.json()
     # get the metadata
-    if responsej["prediction"]=="bioinformatics": # Extract metadata
-        metadataUrl = f"http://localhost:5300/metadata?threshold=0.7&ignore_classifiers=false"
+    print(responsej)
+    doc = {
+        "url": f"https:github.com/{randomGithubPath}",
+        "ouwner": randomGithubPath.split('/')[0],
+        "repo": randomGithubPath.split('/')[1],
+        "prediction": responsej["prediction"],
+        "confidence": responsej["confidence"],
+        "model": "bioinforRepo_Bert",
+        "readme": readMe,
+        "date": datetime.now()
+    }
+    
+    if responsej["prediction"]=="bioinformatics" and responsej["confidence"]>0.9: # Extract metadata
+        metadataUrl = f"http:somef-api:5300/metadata?threshold=0.7&ignore_classifiers=false"
         body = {
             "content": readMe
         }
-        response = requests.get(metadataUrl, data = body )
+        response = requests.post(metadataUrl, data = body )
         responsej = response.json()
-        print(responsej)
-        print('A bioiformatics repo was found')
-    else:
-        pass
-
+        doc['metadata'] = responsej
+        
     # save the metadata in the database
+    collection = connectMongo()
+    x = collection.insert_one(doc)
+    
+
+if __name__ == '__main__':
+    # load env variables
+    load_dotenv()
+    sleep(5) # gives time to the other services to start
+
+    # Put your the url of your newest repository
+    header, NewestRepo = confVariables()
+
+    # Process 10 repositories with readme
+
+    for i in range(10):
+        getOneRespositoryPrediction()
+        sleep(1)
+    
+
+
     
